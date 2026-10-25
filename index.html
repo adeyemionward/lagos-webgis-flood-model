@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="initial-scale=1,user-scalable=no,maximum-scale=1,width=device-width">
+        <meta name="mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        
+        <!-- Tailwind CSS CDN -->
+        <script src="https://cdn.tailwindcss.com"></script>
+
+        <!-- QGIS Leaflet Dependencies -->
+        <link rel="stylesheet" href="css/leaflet.css">
+        <link rel="stylesheet" href="css/L.Control.Layers.Tree.css">
+        <link rel="stylesheet" href="css/qgis2web.css">
+        <link rel="stylesheet" href="css/fontawesome-all.min.css">
+        <link rel="stylesheet" href="css/leaflet.photon.css">
+
+        <style>
+            #map { width: 100%; height: 100%; }
+        </style>
+        <title>Lagos Flood Susceptibility Dashboard | Adeyemi Adeshina</title>
+    </head>
+    <body class="flex h-screen bg-slate-100 overflow-hidden font-sans">
+
+        <!-- Sidebar Dashboard Panel (Clean Modern Off-White / Light Slate UI) -->
+        <aside class="w-96 bg-white border-r border-slate-200 shadow-xl z-20 flex flex-col p-6 overflow-y-auto">
+            <div class="mb-5">
+                <span class="text-[10px] font-extrabold tracking-wider text-blue-600 uppercase bg-blue-50 px-2.5 py-1 rounded-full border border-blue-100">Geospatial Portfolio</span>
+                <h1 class="text-xl font-black text-slate-900 mt-2.5">Lagos Flood Risk Map</h1>
+                <p class="text-xs text-slate-500 mt-1.5 leading-relaxed">
+                    A professional spatial analysis project evaluating urban flood susceptibility across Lagos using QGIS, and web mapping tools.
+                </p>
+            </div>
+
+            <hr class="border-slate-100 my-2">
+
+            <!-- Interactive LGA Search & Selector -->
+            <div class="my-4">
+                <label for="lga-search" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Explore LGAs</label>
+                <div class="relative">
+                    <input type="text" id="lga-search" placeholder="Search LGA (e.g. Eti-Osa)..." 
+                        class="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-800 placeholder-slate-400">
+                </div>
+                
+                <!-- Scrollable list of LGAs -->
+                <div id="lga-list" class="space-y-1 mt-2.5 max-h-40 overflow-y-auto pr-1 border border-slate-100 rounded-lg p-2 bg-slate-50/50 shadow-inner">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+
+            <hr class="border-slate-100 my-2">
+
+            <!-- Legend Section -->
+            <div class="my-4">
+                <h2 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3">Map Legend & Parameters</h2>
+                <div class="space-y-3 text-xs text-slate-600">
+                    
+                    <!-- DEM Elevation Color Ramp Bar -->
+                    <!-- Flood Susceptibility / Terrain Risk Gradient -->
+                    <div class="space-y-1.5 bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                        <div class="flex justify-between text-[10px] text-slate-500 font-semibold">
+                            <span class="text-blue-600 font-bold">High Risk (Low-Lying)</span>
+                            <span>Terrain Risk Gradient</span>
+                            <span class="text-amber-600 font-bold">Low Risk (Highland)</span>
+                        </div>
+                        <div class="h-2.5 w-full rounded-sm shadow-inner" style="background: linear-gradient(to right, #2563eb, #38bdf8, #a7f3d0, #fef08a);"></div>
+                    </div>
+
+                    <div class="flex items-start space-x-2.5">
+                        <span class="w-3.5 h-3.5 bg-red-500 rounded-sm mt-0.5 shrink-0 shadow-sm"></span>
+                        <span><strong>Hazard Model:</strong> 500m Buffer, &lt;5m Elev, &lt;2° Slope</span>
+                    </div>
+                    <div class="flex items-start space-x-2.5">
+                        <span class="w-3.5 h-3.5 bg-blue-400 rounded-sm mt-0.5 shrink-0 shadow-sm"></span>
+                        <span><strong>Water Bodies:</strong> Lagos Hydrography</span>
+                    </div>
+                    <div class="flex items-start space-x-2.5">
+                        <span class="w-3.5 h-3.5 border-2 border-slate-600 bg-transparent rounded-sm mt-0.5 shrink-0"></span>
+                        <span><strong>LGA Boundaries:</strong> Administrative Units</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Author & Footer Info -->
+            <div class="mt-auto pt-4 border-t border-slate-100 text-[11px] text-slate-500 space-y-1">
+                <p><strong>Author:</strong> Adeyemi Adeshina</p>
+                <p class="text-slate-400">Erasmus Mundus Project</p>
+            </div>
+        </aside>
+
+        <!-- Main Interactive Map Area with Bottom Info Panel -->
+        <main class="flex-1 relative h-full flex flex-col">
+            <div id="map" class="flex-1"></div>
+            
+            <!-- Dynamic Description Panel -->
+            <div id="info-panel" class="bg-white border-t border-slate-200 px-6 py-4 z-10 shadow-2xl">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <span id="panel-title" class="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Lagos State Overview</span>
+                        <h3 id="panel-heading" class="text-base font-bold text-slate-900">Select an LGA to inspect flood risk</h3>
+                    </div>
+                    <span class="text-[10px] font-semibold bg-slate-100 text-slate-600 px-3 py-1 rounded-full border border-slate-200">Interactive GIS Inspector</span>
+                </div>
+                <p id="panel-description" class="text-xs text-slate-600 mt-1 leading-relaxed">
+                    Click any Local Government Area on the map or select from the sidebar to view localized flood susceptibility insights, coordinates, and topographical parameters.
+                </p>
+            </div>
+        </main>
+
+        <!-- Scripts -->
+        <script src="js/qgis2web_expressions.js"></script>
+        <script src="js/leaflet.js"></script>
+        <script src="js/L.Control.Layers.Tree.min.js"></script>
+        <script src="js/leaflet.rotatedMarker.js"></script>
+        <script src="js/leaflet.pattern.js"></script>
+        <script src="js/leaflet-hash.js"></script>
+        <script src="js/Autolinker.min.js"></script>
+        <script src="js/rbush.min.js"></script>
+        <script src="js/labelgun.min.js"></script>
+        <script src="js/labels.js"></script>
+        <script src="js/leaflet.photon.js"></script>
+        <script src="data/lagos_water_utmgpkg_2.js"></script>
+        <script src="data/nga_admin2_3.js"></script>
+        <script>
+        var map = L.map('map', {
+            zoomControl:false, maxZoom:28, minZoom:1
+        }).fitBounds([[6.170876208161142,2.72829024185377],[6.852895823849187,4.130015858092608]]);
+        var hash = new L.Hash(map);
+        map.attributionControl.setPrefix('<a href="https://github.com/qgis2web/qgis2web" target="_blank">qgis2web</a> &middot; <a href="https://leafletjs.com" title="A JS library for interactive maps">Leaflet</a> &middot; <a href="https://qgis.org">QGIS</a>');
+        var autolinker = new Autolinker({truncate: {length: 30, location: 'smart'}});
+        
+        function removeEmptyRowsFromPopupContent(content, feature) {
+         var tempDiv = document.createElement('div');
+         tempDiv.innerHTML = content;
+         var rows = tempDiv.querySelectorAll('tr');
+         for (var i = 0; i < rows.length; i++) {
+             var td = rows[i].querySelector('td.visible-with-data');
+             var key = td ? td.id : '';
+             if (td && td.classList.contains('visible-with-data') && feature.properties[key] == null) {
+                 rows[i].parentNode.removeChild(rows[i]);
+             }
+         }
+         return tempDiv.innerHTML;
+        }
+
+        function addClassToPopupIfMedia(content, popup) {
+            var tempDiv = document.createElement('div');
+            tempDiv.innerHTML = content;
+            var imgTd = tempDiv.querySelector('td img');
+            if (imgTd) {
+                var src = imgTd.getAttribute('src');
+                if (/\.(jpg|jpeg|png|gif|bmp|webp|avif)$/i.test(src)) {
+                    popup._contentNode.classList.add('media');
+                    var img = popup._contentNode.querySelector('td img');
+                    if (img) {
+                        if (img.complete && img.naturalHeight > 0) {
+                            popup.update();
+                        } else {
+                            img.addEventListener('load', function() { popup.update(); });
+                            img.addEventListener('error', function() { popup.update(); });
+                        }
+                    }
+                } else {
+                    popup._contentNode.classList.remove('media');
+                }
+            } else {
+                popup._contentNode.classList.remove('media');
+            }
+        }
+
+        var zoomControl = L.control.zoom({
+            position: 'topright'
+        }).addTo(map);
+
+        var bounds_group = new L.featureGroup([]);
+        function setBounds() {}
+
+        map.createPane('pane_LagosstateDEM_0');
+        map.getPane('pane_LagosstateDEM_0').style.zIndex = 400;
+        var img_LagosstateDEM_0 = 'data/LagosstateDEM_0.png';
+        var img_bounds_LagosstateDEM_0 = [[6.370972233333334,2.7023611],[6.698194455555556,4.3506944333333335]];
+        var layer_LagosstateDEM_0 = new L.imageOverlay(img_LagosstateDEM_0, img_bounds_LagosstateDEM_0, {pane: 'pane_LagosstateDEM_0'});
+        bounds_group.addLayer(layer_LagosstateDEM_0);
+        map.addLayer(layer_LagosstateDEM_0);
+
+        map.createPane('pane_lagos_final_hazard_500M_5Melevation_2Mslope_1');
+        map.getPane('pane_lagos_final_hazard_500M_5Melevation_2Mslope_1').style.zIndex = 401;
+        var img_lagos_final_hazard_500M_5Melevation_2Mslope_1 = 'data/lagos_final_hazard_500M_5Melevation_2Mslope_1.png';
+        var img_bounds_lagos_final_hazard_500M_5Melevation_2Mslope_1 = [[6.3690951565133505,2.702166537449002],[6.700050980812806,4.351602188524411]];
+        var layer_lagos_final_hazard_500M_5Melevation_2Mslope_1 = new L.imageOverlay(img_lagos_final_hazard_500M_5Melevation_2Mslope_1, img_bounds_lagos_final_hazard_500M_5Melevation_2Mslope_1, {pane: 'pane_lagos_final_hazard_500M_5Melevation_2Mslope_1'});
+        bounds_group.addLayer(layer_lagos_final_hazard_500M_5Melevation_2Mslope_1);
+        map.addLayer(layer_lagos_final_hazard_500M_5Melevation_2Mslope_1);
+
+        function pop_lagos_water_utmgpkg_2(feature, layer) {
+            var popupContent = '<div class="p-2"><strong>Water Feature</strong><br>' + (feature.properties['name'] !== null ? feature.properties['name'] : 'Unnamed') + '</div>';
+            layer.bindPopup(popupContent, { maxHeight: 400 });
+        }
+
+        function style_lagos_water_utmgpkg_2_0() {
+            return {
+                pane: 'pane_lagos_water_utmgpkg_2',
+                opacity: 1,
+                color: 'rgba(93,173,226,1.0)',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 0.9,
+                fillColor: 'rgba(93,173,226,0.8)',
+                interactive: true,
+            }
+        }
+        map.createPane('pane_lagos_water_utmgpkg_2');
+        map.getPane('pane_lagos_water_utmgpkg_2').style.zIndex = 402;
+        var layer_lagos_water_utmgpkg_2 = new L.geoJson(json_lagos_water_utmgpkg_2, {
+            interactive: true,
+            onEachFeature: pop_lagos_water_utmgpkg_2,
+            style: style_lagos_water_utmgpkg_2_0,
+        });
+        bounds_group.addLayer(layer_lagos_water_utmgpkg_2);
+        map.addLayer(layer_lagos_water_utmgpkg_2);
+
+        function pop_nga_admin2_3(feature, layer) {
+            var popupContent = '<div class="p-2"><strong>LGA:</strong> ' + (feature.properties['adm2_name'] !== null ? feature.properties['adm2_name'] : '') + '</div>';
+            layer.bindPopup(popupContent, { maxHeight: 400 });
+        }
+
+        function style_nga_admin2_3_0() {
+            return {
+                pane: 'pane_nga_admin2_3',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.6)',
+                weight: 1.5, 
+                fillOpacity: 0,
+                interactive: true,
+            }
+        }
+        map.createPane('pane_nga_admin2_3');
+        map.getPane('pane_nga_admin2_3').style.zIndex = 403;
+        var layer_nga_admin2_3 = new L.geoJson(json_nga_admin2_3, {
+            interactive: true,
+            onEachFeature: pop_nga_admin2_3,
+            style: style_nga_admin2_3_0,
+        });
+        bounds_group.addLayer(layer_nga_admin2_3);
+        map.addLayer(layer_nga_admin2_3);
+
+        // --- LGA LABELS ---
+        var i = 0;
+        layer_nga_admin2_3.eachLayer(function(layer) {
+            var context = { feature: layer.feature, variables: {} };
+            layer.bindTooltip((layer.feature.properties['adm2_name'] !== null?String('<div style="color: #000000; font-size: 7pt; font-weight: bold; font-family: \'Open Sans\', sans-serif;">' + layer.feature.properties['adm2_name']).replace(/\\n/g, '<br>') + '</div>':''), {permanent: true, offset: [-0, -16], className: 'css_nga_admin2_3'});
+            labels.push(layer);
+            totalMarkers += 1;
+            layer.added = true;
+            addLabel(layer, i);
+            i++;
+        });
+
+        L.ImageOverlay.include({
+            getBounds: function () { return this._bounds; }
+        });
+
+        resetLabels([layer_nga_admin2_3]);
+        map.on("zoomend", function(){ resetLabels([layer_nga_admin2_3]); });
+        map.on("layeradd", function(){ resetLabels([layer_nga_admin2_3]); });
+        map.on("layerremove", function(){ resetLabels([layer_nga_admin2_3]); });
+
+        // --- INFO PANEL & SEARCH LOGIC ---
+        function updateInfoPanel(lgaName, featureProps, lat, lng) {
+            document.getElementById('panel-title').innerText = "LGA Risk Analysis: " + lgaName;
+            document.getElementById('panel-heading').innerText = lgaName + " District Profile";
+            
+            let riskLevel = "Moderate";
+            let riskColor = "text-yellow-700 bg-yellow-50 border-yellow-200";
+            let specificInsight = "";
+
+            const highRiskLgas = ["Eti-Osa", "Apapa", "Lagos Island", "Amuwo-Odofin", "Ibeju/Lekki", "Badagry", "Ojo", "Ajeromi-Ifelodun", "Lagos Mainland", "Surulere", "Shomolu"];
+            const moderateRiskLgas = ["Alimosho", "Oshodi-Isolo", "Mushin", "Kosofe"];
+
+            if (highRiskLgas.some(lga => lgaName.includes(lga))) {
+                riskLevel = "High Susceptibility";
+                riskColor = "text-red-700 bg-red-50 border-red-200";
+                specificInsight = "Characterized by low-lying coastal and lagoon-adjacent terrain. Highly vulnerable to tidal surges, high water tables, and severe inundation during extreme precipitation events.";
+            } else if (moderateRiskLgas.some(lga => lgaName.includes(lga))) {
+                riskLevel = "Moderate Susceptibility";
+                riskColor = "text-yellow-700 bg-yellow-50 border-yellow-200";
+                specificInsight = "Situated on intermediate terrain. While base elevation is higher, flash flooding occurs due to rapid urban surface runoff and high built-up density.";
+            } else {
+                riskLevel = "Low-to-Moderate Risk";
+                riskColor = "text-emerald-700 bg-emerald-50 border-emerald-200";
+                specificInsight = "Features higher baseline topography from the Copernicus GLO-30 DEM, acting primarily as drainage outflow corridors.";
+            }
+
+            document.getElementById('panel-description').innerHTML = `
+                <div class="space-y-2">
+                    <div class="flex items-center space-x-3">
+                        <span class="text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${riskColor}">${riskLevel}</span>
+                        <span class="text-[11px] font-mono text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded border border-slate-200">📍 Lat: ${lat}°, Lng: ${lng}°</span>
+                    </div>
+                    <p class="text-xs text-slate-600">Evaluating spatial vulnerability for <strong>${lgaName}</strong>. ${specificInsight}</p>
+                </div>
+            `;
+        }
+
+        var lgaLayersMap = {}; 
+        layer_nga_admin2_3.eachLayer(function(layer) {
+            var lgaName = layer.feature.properties['adm2_name'];
+            if (lgaName) {
+                lgaLayersMap[lgaName] = layer;
+                layer.on('click', function(e) {
+                    var center = layer.getBounds().getCenter();
+                    updateInfoPanel(lgaName, layer.feature.properties, center.lat.toFixed(4), center.lng.toFixed(4));
+                });
+            }
+        });
+
+        var lgaContainer = document.getElementById('lga-list');
+        var sortedLgas = Object.keys(lgaLayersMap).sort();
+
+        function renderLgaList(filterText = '') {
+            lgaContainer.innerHTML = '';
+            sortedLgas.forEach(function(lgaName) {
+                if (lgaName.toLowerCase().includes(filterText.toLowerCase())) {
+                    var btn = document.createElement('button');
+                    btn.className = 'w-full text-left px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-600 rounded-md transition-colors flex items-center justify-between group';
+                    btn.innerHTML = `<span>${lgaName}</span> <span class="text-slate-400 text-[10px] group-hover:text-blue-500 font-semibold">Zoom &rarr;</span>`;
+                    
+                    btn.onclick = function() {
+                        var targetLayer = lgaLayersMap[lgaName];
+                        if (targetLayer) {
+                            var center = targetLayer.getBounds().getCenter();
+                            map.fitBounds(targetLayer.getBounds(), { padding: [50, 50], maxZoom: 13 });
+                            targetLayer.openPopup();
+                            updateInfoPanel(lgaName, targetLayer.feature.properties, center.lat.toFixed(4), center.lng.toFixed(4));
+                        }
+                    };
+                    lgaContainer.appendChild(btn);
+                }
+            });
+        }
+
+        renderLgaList();
+
+        document.getElementById('lga-search').addEventListener('input', function(e) {
+            renderLgaList(e.target.value);
+        });
+
+        setBounds();
+        </script>
+    </body>
+</html>
